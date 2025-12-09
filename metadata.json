@@ -1,0 +1,5 @@
+{
+  "name": "SquareInventory",
+  "description": "A mobile-first inventory management interface mimicking Square POS aesthetics. Allows fuzzy searching products, adjusting stock levels, and submitting batch changes.",
+  "requestFramePermissions": []
+}
