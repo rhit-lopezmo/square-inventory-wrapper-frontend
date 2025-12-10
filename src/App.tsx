@@ -5,14 +5,43 @@ import { Button } from '@/components/Button';
 import { MOCK_PRODUCTS } from '@/constants';
 import { Product, InventoryChange } from '@/types';
 import { fuzzyMatch, cn } from '@/utils';
-import { Package, Search, ChevronRight, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { fetchInventory, updateProductStock } from '@/api';
+import { Package, ChevronRight, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 
 function App() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoadingInventory, setIsLoadingInventory] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [adjustments, setAdjustments] = useState<Record<string, number>>({});
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  // Load inventory from backend; fall back to mock data if unavailable
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadInventory = async () => {
+      setIsLoadingInventory(true);
+      try {
+        const data = await fetchInventory();
+        if (cancelled) return;
+        setProducts(data);
+        setLoadError(null);
+      } catch (error) {
+        console.error('Failed to load inventory', error);
+        if (cancelled) return;
+        setLoadError('Using mock data because the inventory API is unavailable.');
+        setProducts(MOCK_PRODUCTS);
+      } finally {
+        if (!cancelled) setIsLoadingInventory(false);
+      }
+    };
+
+    loadInventory();
+    return () => { cancelled = true; };
+  }, []);
 
   // Filter products based on search
   const filteredProducts = useMemo(() => {
@@ -21,12 +50,12 @@ function App() {
     // Given the prompt "search on them", let's show all if empty but allow filtering.
     // However, for "Selecting" workflow, it's cleaner to show suggestions.
 
-    return MOCK_PRODUCTS.filter(p =>
+    return products.filter(p =>
       fuzzyMatch(searchTerm, p.name) ||
       fuzzyMatch(searchTerm, p.sku) ||
       fuzzyMatch(searchTerm, p.category)
     );
-  }, [searchTerm]);
+  }, [searchTerm, products]);
 
   const handleSelectProduct = (product: Product) => {
     setSearchTerm(''); // Clear search on select to return to workspace view
@@ -71,25 +100,39 @@ function App() {
       return;
     }
 
-    console.log("Submitting to backend:", changes);
+    try {
+      const updates = await Promise.all(changes.map(async ({ productId, delta }) => {
+        const product = products.find(p => p.id === productId);
+        if (!product) return null;
+        const updated = await updateProductStock(product.sku, { currentStock: product.currentStock + delta });
+        return { id: product.id, product: updated };
+      }));
 
-    // Fake delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+      const updatesMap = new Map<string, Product>();
+      updates.forEach(entry => {
+        if (entry) updatesMap.set(entry.id, entry.product);
+      });
 
-    setIsSubmitting(false);
-    setSubmitStatus('success');
+      setProducts(prev => prev.map(p => updatesMap.get(p.id) ?? p));
+      setSubmitStatus('success');
 
-    // Reset after success
-    setTimeout(() => {
-      setSubmitStatus('idle');
-      setAdjustments({});
-      setSelectedProductIds(new Set());
-    }, 2000);
+      // Reset after success
+      setTimeout(() => {
+        setSubmitStatus('idle');
+        setAdjustments({});
+        setSelectedProductIds(new Set());
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to submit inventory updates', error);
+      setSubmitStatus('error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Derived state for the workspace
   const selectedProducts = Array.from(selectedProductIds)
-    .map(id => MOCK_PRODUCTS.find(p => p.id === id))
+    .map(id => products.find(p => p.id === id))
     .filter((p): p is Product => !!p)
     .map(p => ({
       ...p,
@@ -120,10 +163,23 @@ function App() {
           <label className="block text-sm font-medium text-gray-700 mb-2">Find Product</label>
           <SearchBar value={searchTerm} onChange={setSearchTerm} />
 
+          {isLoadingInventory && (
+            <div className="mt-3 text-sm text-gray-500">Loading inventory...</div>
+          )}
+
+          {loadError && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              <AlertCircle size={16} />
+              <span>{loadError}</span>
+            </div>
+          )}
+
           {/* Search Results Dropdown/List */}
           {searchTerm && (
             <div className="mt-2 bg-white rounded-lg shadow-lg border border-gray-100 overflow-hidden absolute w-[calc(100%-2rem)] max-w-3xl z-10">
-              {filteredProducts.length === 0 ? (
+              {isLoadingInventory ? (
+                <div className="p-4 text-center text-gray-500">Loading inventory...</div>
+              ) : filteredProducts.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">No products found matching "{searchTerm}"</div>
               ) : (
                 <ul className="divide-y divide-gray-100 max-h-[60vh] overflow-y-auto">

@@ -4,7 +4,10 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 // GET /inventory
 export async function fetchInventory(): Promise<Product[]> {
-  const res = await fetch(`${API_URL}/inventory`);
+  if (!API_URL) {
+    throw new Error("VITE_API_URL is not set; provide a base URL in your .env file.");
+  }
+  const res = await fetch(`${API_URL}/api/inventory`);
   if (!res.ok) {
     throw new Error(`Failed to fetch inventory: ${res.status}`);
   }
@@ -16,7 +19,10 @@ export async function updateProductStock(
   sku: string,
   updated: Partial<Product>
 ): Promise<Product> {
-  const res = await fetch(`${API_URL}/product/${sku}`, {
+  if (!API_URL) {
+    throw new Error("VITE_API_URL is not set; provide a base URL in your .env file.");
+  }
+  const res = await fetch(`${API_URL}/api/product/${sku}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updated),
@@ -28,4 +34,3 @@ export async function updateProductStock(
 
   return res.json();
 }
-
