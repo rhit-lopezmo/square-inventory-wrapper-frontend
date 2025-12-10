@@ -1,8 +1,8 @@
 import React from 'react';
 import { Minus, Plus, X, ArrowRight } from 'lucide-react';
-import { ProductWithChange } from '../types';
-import { Button } from './Button';
-import { cn } from '../utils';
+import { ProductWithChange } from '@/types';
+import { Button } from '@/components/Button';
+import { cn } from '@/utils';
 
 interface AdjustmentCardProps {
   item: ProductWithChange;
