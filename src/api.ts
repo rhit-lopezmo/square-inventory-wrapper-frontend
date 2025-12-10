@@ -14,7 +14,7 @@ export async function fetchInventory(): Promise<Product[]> {
   return res.json();
 }
 
-// PUT /product/:sku
+// PUT /inventory/:sku
 export async function updateProductStock(
   sku: string,
   updated: Partial<Product>
@@ -22,7 +22,7 @@ export async function updateProductStock(
   if (!API_URL) {
     throw new Error("VITE_API_URL is not set; provide a base URL in your .env file.");
   }
-  const res = await fetch(`${API_URL}/api/product/${sku}`, {
+  const res = await fetch(`${API_URL}/api/inventory/${sku}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updated),
