@@ -6,6 +6,8 @@ export interface Product {
   currentStock: number;
   imageUrl: string;
   category: string;
+  // Some backends may expose reporting categories separately; keep optional for compatibility.
+  reportingCategory?: string;
 }
 
 export interface InventoryChange {

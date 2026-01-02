@@ -7,7 +7,7 @@ import { Product, InventoryChange } from '@/types';
 import { fuzzyMatch, cn } from '@/utils';
 import { fetchInventory, updateProductStock } from '@/api';
 import { useAuth } from '@/auth';
-import { Package, ChevronRight, CheckCircle2, AlertCircle, ArrowRight, LogOut } from 'lucide-react';
+import { Package, ChevronRight, CheckCircle2, AlertCircle, ArrowRight, LogOut, Filter, Check } from 'lucide-react';
 
 function App() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -18,7 +18,14 @@ function App() {
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [categoryList, setCategoryList] = useState<string[]>([]);
   const { user, logout } = useAuth();
+  const getCategoryLabel = (product: Product) => {
+    const raw = (product.category ?? (product as unknown as { reportingCategory?: string }).reportingCategory ?? '').toString().trim();
+    return raw || 'Uncategorized';
+  };
 
   // Load inventory from backend; fall back to mock data if unavailable
   useEffect(() => {
@@ -45,6 +52,15 @@ function App() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    const unique = new Set<string>();
+    products.forEach(p => {
+      const category = getCategoryLabel(p);
+      unique.add(category);
+    });
+    setCategoryList(Array.from(unique).sort());
+  }, [products]);
+
   // Filter products based on search
   const filteredProducts = useMemo(() => {
     if (!searchTerm) return []; // Don't show list if no search (optional, allows cleaner UI)
@@ -52,12 +68,16 @@ function App() {
     // Given the prompt "search on them", let's show all if empty but allow filtering.
     // However, for "Selecting" workflow, it's cleaner to show suggestions.
 
-    return products.filter(p =>
+    return products.filter(p => {
+      const category = getCategoryLabel(p);
+      const matchesSearch =
       fuzzyMatch(searchTerm, p.name) ||
       fuzzyMatch(searchTerm, p.sku) ||
-      fuzzyMatch(searchTerm, p.category)
-    );
-  }, [searchTerm, products]);
+      fuzzyMatch(searchTerm, category);
+      const matchesCategory = selectedCategories.size === 0 || selectedCategories.has(category);
+      return matchesSearch && matchesCategory;
+    });
+  }, [searchTerm, products, selectedCategories]);
 
   const handleSelectProduct = (product: Product) => {
     setSearchTerm(''); // Clear search on select to return to workspace view
@@ -132,6 +152,20 @@ function App() {
     }
   };
 
+  const handleToggleCategory = (category: string) => {
+    setSelectedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+
+  const handleClearCategories = () => setSelectedCategories(new Set());
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -190,7 +224,72 @@ function App() {
 
         {/* Search Section */}
         <div className="mb-8">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Find Product</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700">Find Product</label>
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="border border-gray-200 text-gray-700 hover:bg-gray-100"
+                onClick={() => setIsFilterOpen(open => !open)}
+              >
+                <Filter size={16} className="mr-2" />
+                Category
+                {selectedCategories.size > 0 && (
+                  <span className="ml-2 text-xs font-semibold text-black bg-gray-100 px-2 py-0.5 rounded-full border border-gray-200">
+                    {selectedCategories.size}
+                  </span>
+                )}
+              </Button>
+
+              {isFilterOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-30">
+                  <div className="p-3 max-h-60 overflow-y-auto space-y-2">
+                    {isLoadingInventory ? (
+                      <p className="text-sm text-gray-500">Loading categories...</p>
+                    ) : categoryList.length === 0 ? (
+                      <p className="text-sm text-gray-500">No categories available.</p>
+                    ) : (
+                      categoryList.map(category => {
+                        const checked = selectedCategories.has(category);
+                        return (
+                          <button
+                            key={category}
+                            type="button"
+                            onClick={() => handleToggleCategory(category)}
+                            className={cn(
+                              "w-full flex items-center justify-between text-sm px-3 py-2 rounded-md border",
+                              checked ? "border-black bg-gray-50" : "border-gray-200 hover:border-gray-300"
+                            )}
+                          >
+                            <span className="text-gray-800">{category}</span>
+                            {checked && <Check size={16} className="text-black" />}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+                    <button
+                      type="button"
+                      className="text-sm text-gray-600 hover:text-gray-900"
+                      onClick={handleClearCategories}
+                    >
+                      Clear
+                    </button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setIsFilterOpen(false)}
+                      className="h-9"
+                    >
+                      Done
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
           <SearchBar value={searchTerm} onChange={setSearchTerm} />
 
           {isLoadingInventory && (
