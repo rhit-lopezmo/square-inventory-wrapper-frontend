@@ -4,9 +4,10 @@ import { Search } from 'lucide-react';
 interface SearchBarProps {
   value: string;
   onChange: (val: string) => void;
+  onFocus?: () => void;
 }
 
-export const SearchBar: React.FC<SearchBarProps> = ({ value, onChange }) => {
+export const SearchBar: React.FC<SearchBarProps> = ({ value, onChange, onFocus }) => {
   return (
     <div className="relative w-full">
       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -18,6 +19,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({ value, onChange }) => {
         placeholder="Search products, SKU, or category..."
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onFocus={onFocus}
       />
     </div>
   );

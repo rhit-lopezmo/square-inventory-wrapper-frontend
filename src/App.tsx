@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { SearchBar } from '@/components/SearchBar';
 import { AdjustmentCard } from '@/components/AdjustmentCard';
 import { Button } from '@/components/Button';
@@ -21,6 +21,10 @@ function App() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [categoryList, setCategoryList] = useState<string[]>([]);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [visibleLimit, setVisibleLimit] = useState(100);
+  const searchAreaRef = useRef<HTMLDivElement>(null);
+  const filterAreaRef = useRef<HTMLDivElement>(null);
   const { user, logout } = useAuth();
   const getCategoryLabel = (product: Product) => {
     const raw = (product.category ?? (product as unknown as { reportingCategory?: string }).reportingCategory ?? '').toString().trim();
@@ -61,26 +65,52 @@ function App() {
     setCategoryList(Array.from(unique).sort());
   }, [products]);
 
+  useEffect(() => {
+    setVisibleLimit(100);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (searchAreaRef.current && !searchAreaRef.current.contains(target)) {
+        setIsSearchOpen(false);
+      }
+      if (filterAreaRef.current && !filterAreaRef.current.contains(target)) {
+        setIsFilterOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Filter products based on search
   const filteredProducts = useMemo(() => {
-    if (!searchTerm) return []; // Don't show list if no search (optional, allows cleaner UI)
-    // Actually, user often wants to browse. Let's show all if empty, or filter.
-    // Given the prompt "search on them", let's show all if empty but allow filtering.
-    // However, for "Selecting" workflow, it's cleaner to show suggestions.
-
+    const term = searchTerm.trim();
     return products.filter(p => {
       const category = getCategoryLabel(p);
-      const matchesSearch =
-      fuzzyMatch(searchTerm, p.name) ||
-      fuzzyMatch(searchTerm, p.sku) ||
-      fuzzyMatch(searchTerm, category);
       const matchesCategory = selectedCategories.size === 0 || selectedCategories.has(category);
-      return matchesSearch && matchesCategory;
+      if (!matchesCategory) return false;
+      if (!term) return true; // show all when no text
+      return (
+        fuzzyMatch(term, p.name) ||
+        fuzzyMatch(term, p.sku) ||
+        fuzzyMatch(term, category)
+      );
     });
   }, [searchTerm, products, selectedCategories]);
 
+  const isBrowsingAll = isSearchOpen && searchTerm.trim() === '';
+  const visibleProducts = useMemo(() => {
+    if (isBrowsingAll) {
+      return filteredProducts.slice(0, visibleLimit);
+    }
+    return filteredProducts;
+  }, [filteredProducts, isBrowsingAll, visibleLimit]);
+
   const handleSelectProduct = (product: Product) => {
     setSearchTerm(''); // Clear search on select to return to workspace view
+    setIsSearchOpen(false);
     setSelectedProductIds(prev => {
       const next = new Set(prev);
       next.add(product.id);
@@ -185,6 +215,11 @@ function App() {
 
   const totalChanges = Object.values(adjustments).filter(d => d !== 0).length;
 
+  const handleSearchChange = (val: string) => {
+    setSearchTerm(val);
+    setIsSearchOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-[#F7F7F7] pb-32">
       {/* Header */}
@@ -223,10 +258,10 @@ function App() {
       <main className="max-w-3xl mx-auto px-4 pt-6">
 
         {/* Search Section */}
-        <div className="mb-8">
+        <div className="mb-8" ref={searchAreaRef}>
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700">Find Product</label>
-            <div className="relative">
+            <div className="relative" ref={filterAreaRef}>
               <Button
                 variant="ghost"
                 size="sm"
@@ -290,7 +325,11 @@ function App() {
               )}
             </div>
           </div>
-          <SearchBar value={searchTerm} onChange={setSearchTerm} />
+          <SearchBar
+            value={searchTerm}
+            onChange={handleSearchChange}
+            onFocus={() => setIsSearchOpen(true)}
+          />
 
           {isLoadingInventory && (
             <div className="mt-3 text-sm text-gray-500">Loading inventory...</div>
@@ -304,32 +343,51 @@ function App() {
           )}
 
           {/* Search Results Dropdown/List */}
-          {searchTerm && (
+          {isSearchOpen && (
             <div className="mt-2 bg-white rounded-lg shadow-lg border border-gray-100 overflow-hidden absolute w-[calc(100%-2rem)] max-w-3xl z-10">
               {isLoadingInventory ? (
                 <div className="p-4 text-center text-gray-500">Loading inventory...</div>
               ) : filteredProducts.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">No products found matching "{searchTerm}"</div>
+                <div className="p-4 text-center text-gray-500">
+                  {searchTerm ? `No products found matching "${searchTerm}"` : 'No products available.'}
+                </div>
               ) : (
-                <ul className="divide-y divide-gray-100 max-h-[60vh] overflow-y-auto">
-                  {filteredProducts.map(product => (
-                    <li
-                      key={product.id}
-                      onClick={() => handleSelectProduct(product)}
-                      className="p-4 hover:bg-gray-50 cursor-pointer flex items-center gap-3 transition-colors active:bg-gray-100"
-                    >
-                      <img src={product.imageUrl} alt="" className="w-10 h-10 rounded bg-gray-200 object-cover" />
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900">{product.name}</div>
-                        <div className="text-xs text-gray-500">{product.sku}</div>
-                      </div>
-                      <div className="text-sm text-gray-400">
-                        Stock: {product.currentStock}
-                      </div>
-                      <ChevronRight size={16} className="text-gray-300" />
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <ul className="divide-y divide-gray-100 max-h-[60vh] overflow-y-auto">
+                    {visibleProducts.map(product => (
+                      <li
+                        key={product.id}
+                        onClick={() => handleSelectProduct(product)}
+                        className="p-4 hover:bg-gray-50 cursor-pointer flex items-center gap-3 transition-colors active:bg-gray-100"
+                      >
+                        <img src={product.imageUrl} alt="" className="w-10 h-10 rounded bg-gray-200 object-cover" />
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{product.name}</div>
+                          <div className="text-xs text-gray-500">{product.sku}</div>
+                        </div>
+                        <div className="text-sm text-gray-400">
+                          Stock: {product.currentStock}
+                        </div>
+                        <ChevronRight size={16} className="text-gray-300" />
+                      </li>
+                    ))}
+                  </ul>
+                  {isBrowsingAll && filteredProducts.length > visibleLimit && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
+                      <span className="text-sm text-gray-600">
+                        Showing {visibleLimit} of {filteredProducts.length}
+                      </span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setVisibleLimit(limit => limit + 100)}
+                        className="h-9"
+                      >
+                        Show more
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

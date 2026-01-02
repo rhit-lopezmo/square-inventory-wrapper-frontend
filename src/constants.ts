@@ -1,6 +1,6 @@
 import { Product } from './types';
 
-export const MOCK_PRODUCTS: Product[] = [
+const BASE_PRODUCTS: Product[] = [
   {
     id: 'p1',
     name: 'Vanilla Latte',
@@ -65,3 +65,21 @@ export const MOCK_PRODUCTS: Product[] = [
     category: 'Beverage'
   }
 ];
+
+const GENERATED_PRODUCTS: Product[] = Array.from({ length: 94 }, (_, index) => {
+  const idNumber = index + 8; // continue after base products
+  const categories = ['Beverage', 'Bakery', 'Coffee', 'Merchandise', 'Grocery'];
+  const category = categories[idNumber % categories.length];
+
+  return {
+    id: `p${idNumber}`,
+    name: `Sample Item ${idNumber}`,
+    description: `Placeholder description for Sample Item ${idNumber}.`,
+    sku: `SKU-${idNumber.toString().padStart(3, '0')}`,
+    currentStock: (idNumber * 3) % 160,
+    imageUrl: `https://picsum.photos/400/400?random=${idNumber}`,
+    category
+  };
+});
+
+export const MOCK_PRODUCTS: Product[] = [...BASE_PRODUCTS, ...GENERATED_PRODUCTS];
