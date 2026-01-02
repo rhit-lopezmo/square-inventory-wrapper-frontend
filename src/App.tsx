@@ -6,7 +6,8 @@ import { MOCK_PRODUCTS } from '@/constants';
 import { Product, InventoryChange } from '@/types';
 import { fuzzyMatch, cn } from '@/utils';
 import { fetchInventory, updateProductStock } from '@/api';
-import { Package, ChevronRight, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { useAuth } from '@/auth';
+import { Package, ChevronRight, CheckCircle2, AlertCircle, ArrowRight, LogOut } from 'lucide-react';
 
 function App() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -17,6 +18,7 @@ function App() {
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const { user, logout } = useAuth();
 
   // Load inventory from backend; fall back to mock data if unavailable
   useEffect(() => {
@@ -130,6 +132,14 @@ function App() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Failed to sign out', error);
+    }
+  };
+
   // Derived state for the workspace
   const selectedProducts = Array.from(selectedProductIds)
     .map(id => products.find(p => p.id === id))
@@ -152,7 +162,27 @@ function App() {
             </div>
             <h1 className="text-lg font-bold tracking-tight text-gray-900">Inventory<span className="text-gray-400 font-normal">Manager</span></h1>
           </div>
-          <div className="h-8 w-8 rounded-full bg-gray-200"></div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-full border border-gray-200">
+              <div className="h-9 w-9 rounded-full bg-black text-white flex items-center justify-center font-semibold uppercase">
+                {user?.email?.charAt(0).toUpperCase() ?? 'U'}
+              </div>
+              <div className="hidden sm:flex flex-col">
+                <span className="text-[11px] uppercase tracking-[0.15em] text-gray-500">Signed in</span>
+                <span className="text-sm font-semibold text-gray-900 max-w-[180px] truncate">{user?.email ?? 'User'}</span>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="border border-gray-200 text-gray-700 hover:bg-gray-100"
+              onClick={handleLogout}
+            >
+              <LogOut size={16} className="mr-2" />
+              <span className="hidden sm:inline">Sign out</span>
+              <span className="sm:hidden">Exit</span>
+            </Button>
+          </div>
         </div>
       </header>
 
